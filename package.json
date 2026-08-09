@@ -1,0 +1,27 @@
+{
+  "name": "hofii",
+  "version": "0.0.1",
+  "description": "An orchestration tools for manage dotfile and packages",
+  "module": "index.ts",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "hofii": "./dist/main.js"
+  },
+  "scripts": {
+    "dev": "bun run index.ts",
+    "scan": "bun run index.ts scan",
+    "validate": "bun run index.ts validate",
+    "switch": "bun run index.ts switch"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0",
+    "cac": "^7.0.0",
+    "deepmerge-ts": "^7.1.5",
+    "valibot": "^1.4.2"
+  }
+}
