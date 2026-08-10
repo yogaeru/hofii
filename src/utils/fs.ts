@@ -6,8 +6,6 @@ import { getHofiEnv } from "#/data/env";
 import type { Stats } from "node:fs";
 
 async function createSymlink(source: string, target: string, sudo = false) {
-  const info = [source, "->", target].join(" ");
-
   if (sudo) {
     if (getHofiEnv("platform") !== "linux") {
       clack.log.warn("Sudo only support in Linux");
@@ -16,18 +14,14 @@ async function createSymlink(source: string, target: string, sudo = false) {
 
     await spawn({
       cmd: ["sudo", "ln", "-s", source, target],
-      errMsg: `Failed create symlink ${info}`,
+      errMsg: `Failed create symlink ${source + " -> " + target}`,
     });
   } else {
     await fs.symlink(source, target);
   }
-
-  clack.log.success(`Succesfully create symlink ${info}`);
 }
 
 async function removeSymlink(target: string, sudo = false) {
-  const info = target;
-
   if (sudo) {
     if (getHofiEnv("platform") !== "linux") {
       clack.log.warn("Sudo only support in Linux");
@@ -36,13 +30,11 @@ async function removeSymlink(target: string, sudo = false) {
 
     await spawn({
       cmd: ["sudo", "rm", target],
-      errMsg: `Failed remove symlink ${info}`,
+      errMsg: `Failed remove symlink ${target}`,
     });
   } else {
     await fs.unlink(target);
   }
-
-  clack.log.success(`Succesfully remove symlink ${info}`);
 }
 
 /**
@@ -57,9 +49,4 @@ async function getFileInfo(filePath: string): Promise<Stats | null> {
   }
 }
 
-export {
-  getFileInfo,
-  createSymlink,
-  removeSymlink,
-
-};
+export { getFileInfo, createSymlink, removeSymlink };

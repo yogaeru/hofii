@@ -50,6 +50,7 @@ export async function applySymlinks(symlinks: SymlinksArgument | undefined) {
 
           await removeSymlink(link.target, link.sudo);
           removedSymlinks.push(link);
+          clack.log.success(`Succesfully remove symlink ${link.target}`);
         }),
       )
     ).filter(
@@ -61,8 +62,16 @@ export async function applySymlinks(symlinks: SymlinksArgument | undefined) {
       await Promise.allSettled(
         added.map(async (link) => {
           const info = await getFileInfo(link.target);
+          const sourceLink = await fs.readlink(link.target);
+
           if (info) {
-            if (isBackup) {
+            if (info.isSymbolicLink() && sourceLink === link.source) {
+              await removeSymlink(link.target, link.sudo);
+              await createSymlink(link.source, link.target, link.sudo);
+              appliedSymlinks.push(link);
+              clack.log.warn(`Recreate ${sourceLink} -> ${link.target}`);
+              return;
+            } else if (isBackup) {
               await fs.rename(link.target, link.target + ".bak");
             } else {
               clack.log.error(
@@ -74,6 +83,9 @@ export async function applySymlinks(symlinks: SymlinksArgument | undefined) {
 
           await createSymlink(link.source, link.target, link.sudo);
           appliedSymlinks.push(link);
+          clack.log.success(
+            `Succesfully create symlink ${link.source} -> ${link.target}`,
+          );
         }),
       )
     ).filter(

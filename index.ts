@@ -10,7 +10,7 @@ import { switchCommand } from "#/commands/switch";
 import { writeMetadata } from "#/data/metadata";
 
 const HofiiCli = cac("hofii");
-HofiiCli.version("0.0.1");
+HofiiCli.version("0.0.3");
 
 HofiiCli.command("scan", "Detect system environment")
   .alias("s")
@@ -32,6 +32,11 @@ HofiiCli.command("switch [dir]", "Switch to new configuration")
   });
 
 try {
+  if (process.argv.slice(2).length === 0) {
+    HofiiCli.outputHelp();
+    process.exit(0);
+  }
+
   HofiiCli.help().parse(process.argv, { run: false });
   await HofiiCli.runMatchedCommand();
 } catch (error) {
@@ -40,10 +45,9 @@ try {
       .map((issue) => {
         const path = issue.path.at(-1)?.input;
 
-        return [
-          `✗ ${issue.message}`,
-          `  at: ${JSON.stringify(path)}`
-        ].join("\n");
+        return [`✗ ${issue.message}`, `  at: ${JSON.stringify(path)}`].join(
+          "\n",
+        );
       })
       .join("\n\n");
     console.error(erroMsg);
