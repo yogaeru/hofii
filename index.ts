@@ -6,7 +6,7 @@ import { scanCommand } from "#/commands/scan";
 import { validateCommand } from "#/commands/validate";
 import { switchCommand } from "#/commands/switch";
 
-import { getMetadata } from "#/data/metadata";
+import { writeMetadata } from "#/data/metadata";
 
 const HofiiCli = cac("hofii");
 HofiiCli.version("0.0.1");
@@ -36,10 +36,5 @@ try {
 } catch (error) {
   console.error(error);
 } finally {
-  const metadata = getMetadata();
-
-  await Bun.write(
-    path.resolve("example/.state/hofii-lock.json"),
-    JSON.stringify(metadata, null, 2),
-  );
+  await writeMetadata();
 }
