@@ -2,6 +2,7 @@
 
 import cac from "cac";
 import path from "node:path";
+import * as v from "valibot";
 import { scanCommand } from "#/commands/scan";
 import { validateCommand } from "#/commands/validate";
 import { switchCommand } from "#/commands/switch";
@@ -34,7 +35,20 @@ try {
   HofiiCli.help().parse(process.argv, { run: false });
   await HofiiCli.runMatchedCommand();
 } catch (error) {
-  console.error(error);
+  if (error instanceof v.ValiError) {
+    const erroMsg = error.issues
+      .map((issue) => {
+        const path = issue.path.at(-1)?.input;
+
+        return [
+          `✗ ${issue.message}`,
+          `  at: ${JSON.stringify(path)}`
+        ].join("\n");
+      })
+      .join("\n\n");
+    console.error(erroMsg);
+  }
+  process.exit(1);
 } finally {
   await writeMetadata();
 }

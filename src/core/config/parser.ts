@@ -1,5 +1,7 @@
+import * as v from "valibot";
 import path from "node:path";
 import { deepmerge } from "deepmerge-ts";
+import { ConfigSchema } from "./schema";
 import { expandPath } from "#/utils/path";
 import type { TypeConfigSchema, ConfigSymlinks } from "./schema";
 
@@ -23,7 +25,8 @@ export async function parseConfigTOML(
 
   visitedPaths.add(absoluteFilePath);
   const content = await Bun.file(absoluteFilePath).text();
-  const parsedConfig = Bun.TOML.parse(content) as TypeConfigSchema;
+  const toml = Bun.TOML.parse(content) as TypeConfigSchema;
+  const parsedConfig = v.parse(ConfigSchema, toml);
 
   const { imports: importedSources = [], symlinks: symlinkConfig = [] } =
     parsedConfig;
@@ -53,6 +56,7 @@ function expandSymlinkPath(
   if (!config || config.length === 0) return [];
 
   const result: ConfigSymlinks = [];
+
   for (const symlink of config) {
     if (!symlink) continue;
     const { source, target } = symlink;
