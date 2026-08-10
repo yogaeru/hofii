@@ -16,12 +16,14 @@ HofiiCli.command("scan", "Detect system environment")
   .alias("s")
   .action(async () => {
     await scanCommand();
+    process.exit(0);
   });
 
 HofiiCli.command("validate [dir]", "Validate configuration files")
   .alias("v")
   .action(async (dir) => {
     await validateCommand(dir);
+    process.exit(0);
   });
 
 HofiiCli.command("switch [dir]", "Switch to new configuration")
