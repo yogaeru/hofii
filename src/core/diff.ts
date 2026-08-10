@@ -1,6 +1,6 @@
 import { deepEquals } from "bun";
-import type { TypeConfigSchema, ConfigSymlinks } from "./config/schema";
 import { getMetadata } from "#/data/metadata";
+import type { TypeConfigSchema, ConfigSymlinks } from "./config/schema";
 
 function diffSynmlinks(
   oldSymlinks: ConfigSymlinks,
@@ -26,8 +26,10 @@ function diffSynmlinks(
  */
 export function diffConfig(newConfig: TypeConfigSchema) {
   const oldConfig = getMetadata();
+  
+  // console.log(JSON.stringify(oldConfig, null, 2))
   const resSymlinks = diffSynmlinks(
-    oldConfig?.config?.symlinks,
+    oldConfig.symlinks,
     newConfig.symlinks,
   );
 
