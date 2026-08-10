@@ -1,18 +1,20 @@
 {
   "name": "hofii",
-  "version": "0.0.1",
-  "description": "An orchestration tools for manage dotfile and packages",
+  "description": "An orchestration tools for manage dotfiles and packages",
   "module": "index.ts",
-  "private": true,
   "type": "module",
   "bin": {
     "hofii": "./dist/main.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "bun run index.ts",
     "scan": "bun run index.ts scan",
     "validate": "bun run index.ts validate",
-    "switch": "bun run index.ts switch"
+    "switch": "bun run index.ts switch",
+    "build": "bun build index.ts --target=bun --minify --outfile=dist/main.js"
   },
   "devDependencies": {
     "@types/bun": "latest",
