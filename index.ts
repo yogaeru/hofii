@@ -54,7 +54,7 @@ try {
       .join("\n\n");
     console.error(erroMsg);
   }
-  process.exit(1);
+  console.error(error)
 } finally {
   await writeMetadata();
 }

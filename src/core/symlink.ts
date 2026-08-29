@@ -1,10 +1,15 @@
-import fs from "node:fs/promises";
 import { deepEquals } from "bun";
+import fs from "node:fs/promises";
 import * as clack from "@clack/prompts";
 
 import { getHofiEnv } from "#/data/env";
 import { getMetadata, setMetadata } from "#/data/metadata";
-import { createSymlink, removeSymlink, getFileInfo } from "#/utils/fs";
+import {
+  createSymlink,
+  removeSymlink,
+  getFileInfo,
+  renameFile,
+} from "#/utils/fs";
 
 import type { ConfigSymlinks } from "./config/schema";
 
@@ -19,60 +24,71 @@ interface SymlinksArgument {
  */
 export async function applySymlinks(symlinks: SymlinksArgument | undefined) {
   if (!symlinks) return;
-  const isBackup = getHofiEnv("settings")?.backup ?? "";
+  const isBackup = getHofiEnv("settings")?.backup ?? true;
   const { added = [], removed = [] } = symlinks;
 
-  const appliedSymlinks: ConfigSymlinks = [];
-  const removedSymlinks: ConfigSymlinks = [];
+  // Track successfully applied and removed symlinks
+  const succesfullyAppliedSymlinks: ConfigSymlinks = [];
+  const succesfullyRemovedSymlinks: ConfigSymlinks = [];
 
   try {
-    // Apply removed symlinks
-    const removeResults = (
+    // Apply removed symlinks and get rejected results
+    const rejectedRemovedRes = getRejectedSettled(
       await Promise.allSettled(
         removed.map(async (link) => {
           const info = await getFileInfo(link.target);
 
+          // If the target doesn't exist, warn and skip
           if (!info) {
             clack.log.warn(
               `Target doesn't exist: ${link.target}, did you remove it manually?`,
             );
-            removedSymlinks.push(link);
+            succesfullyRemovedSymlinks.push(link);
             return;
           }
 
+          // If the target is not a symlink, warn and skip
           if (!info.isSymbolicLink()) {
             clack.log.warn(
-              `File ${link.target} not a symlink, did you remove it manually?`,
+              `${link.target} not a symlink, did you remove it manually?`,
             );
-            removedSymlinks.push(link);
+            succesfullyRemovedSymlinks.push(link);
             return;
           }
 
           await removeSymlink(link.target, link.sudo);
-          removedSymlinks.push(link);
+          succesfullyRemovedSymlinks.push(link);
           clack.log.success(`Succesfully remove symlink ${link.target}`);
         }),
-      )
-    ).filter(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
+      ),
     );
 
-    // Apply added symlinks
-    const addResults = (
+    // Apply and get rejected results for added symlinks
+    const rejectedAddedRes = getRejectedSettled(
       await Promise.allSettled(
         added.map(async (link) => {
           const info = await getFileInfo(link.target);
-          const sourceLink = await fs.readlink(link.target);
 
           if (info) {
-            if (info.isSymbolicLink() && sourceLink === link.source) {
-              await removeSymlink(link.target, link.sudo);
-              await createSymlink(link.source, link.target, link.sudo);
-              appliedSymlinks.push(link);
-              clack.log.warn(`Recreate ${sourceLink} -> ${link.target}`);
-              return;
-            } else if (isBackup) {
-              await fs.rename(link.target, link.target + ".bak");
+            // If the target is a symbolic link and the source matches, recreate it
+            if (info.isSymbolicLink()) {
+              const sourceLink = await fs.readlink(link.target);
+              if (sourceLink === link.source) {
+                await removeSymlink(link.target, link.sudo);
+                await createSymlink(link.source, link.target, link.sudo);
+                succesfullyAppliedSymlinks.push(link);
+                clack.log.warn(`Recreate ${sourceLink} -> ${link.target}`);
+                return;
+              }
+            }
+
+            // If target not symbolic link
+            if (isBackup) {
+              await renameFile({
+                oldPath: link.target,
+                newPath: link.target + ".bak",
+                sudo: link.sudo,
+              });
             } else {
               clack.log.error(
                 `Target already exists, skip create: ${link.target}`,
@@ -82,26 +98,25 @@ export async function applySymlinks(symlinks: SymlinksArgument | undefined) {
           }
 
           await createSymlink(link.source, link.target, link.sudo);
-          appliedSymlinks.push(link);
+          succesfullyAppliedSymlinks.push(link);
           clack.log.success(
             `Succesfully create symlink ${link.source} -> ${link.target}`,
           );
         }),
-      )
-    ).filter(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
+      ),
     );
 
-    for (const error of addResults) {
+    // Log any errors that occurred during add/remove operations
+    for (const error of rejectedAddedRes) {
       console.error(`Failed to add symlink: ${formatError(error)}`);
     }
-
-    for (const error of removeResults) {
+    for (const error of rejectedRemovedRes) {
       console.error(`Failed to remove symlink: ${formatError(error)}`);
     }
 
-    if (addResults.length > 0 || removeResults.length > 0) {
-      clack.log.error(` [FATAL] Failed to apply symlinks`);
+    // If there were errors, log a fatal error and exit
+    if (rejectedAddedRes.length > 0 || rejectedRemovedRes.length > 0) {
+      clack.log.error(` [FATAL] Error caused while applying symlinks`);
       process.exitCode = 1;
     }
   } catch (err) {
@@ -111,17 +126,18 @@ export async function applySymlinks(symlinks: SymlinksArgument | undefined) {
   } finally {
     const existingConfig = getMetadata() ?? {};
     const existingSymlinks = existingConfig.symlinks ?? [];
-
     const updatedSymlinks = existingSymlinks
-      .filter((link) => !removedSymlinks.some((l) => deepEquals(l, link)))
-      .concat(appliedSymlinks);
+      .filter(
+        (link) => !succesfullyRemovedSymlinks.some((l) => deepEquals(l, link)),
+      )
+      .concat(succesfullyAppliedSymlinks);
 
     clack.log.info(`Updated symlinks state: ${updatedSymlinks.length}`);
-
     setMetadata("symlinks", updatedSymlinks);
   }
 }
 
+// Helper for formatting error messages
 function formatError(error: unknown) {
   if (error instanceof Error) {
     const code = "code" in error ? String(error.code) : "ERROR";
@@ -130,4 +146,11 @@ function formatError(error: unknown) {
   }
 
   return `[ERROR] ${String(error)}`;
+}
+
+// get rejected from a list of settled results
+function getRejectedSettled<T>(
+  results: PromiseSettledResult<T>[],
+): PromiseRejectedResult[] {
+  return results.filter((result) => result.status === "rejected");
 }
