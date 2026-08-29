@@ -1,7 +1,6 @@
 {
   "name": "hofii",
   "description": "An orchestration tools for manage dotfiles and packages",
-  "module": "index.ts",
   "type": "module",
   "bin": {
     "hofii": "./dist/main.js"
