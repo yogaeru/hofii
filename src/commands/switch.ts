@@ -4,17 +4,20 @@ import { deepmerge } from "deepmerge-ts";
 
 import { runScan } from "#/core/detect";
 import { setHofiEnv } from "#/data/env";
-import { diffConfig, buildDiffString } from "#/core/diff";
 import { validateCommand } from "./validate";
 import { applySymlinks } from "#/core/symlink";
 import { setDefaultMetadata } from "#/data/metadata";
+import { diffConfig, buildDiffString } from "#/core/diff";
 
+/**
+ * Command to switch config into a new config 
+ */
 export async function switchCommand(configDir: string) {
   const configPath = path.join(configDir, "config.toml");
 
   // load metadata from existing lock file
   setHofiEnv("configDir", configDir);
-  await setDefaultMetadata(configDir);
+  await setDefaultMetadata();
 
   clack.intro("Switching configuration");
   clack.log.info("Scanning system environment...");

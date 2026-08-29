@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { getHofiEnv } from "./env";
+import { getHomedir } from "#/utils/path";
 import { type TypeConfigSchema } from "#/core/config/schema";
 
 type Config = Omit<TypeConfigSchema, "imports">;
@@ -10,7 +10,7 @@ interface Metadata {
 }
 
 /**
- * Configuration state for the Hofii CLI
+ * Configuration state for the Hofii
  */
 const CONFIG: Config = {};
 
@@ -38,9 +38,9 @@ export function setMetadata<K extends keyof Config>(key: K, value: Config[K]) {
 /**
  * Set default metadata from the environment or config directory
  */
-export async function setDefaultMetadata(configDir?: string) {
-  const dir = configDir ?? getHofiEnv("configDir");
-  const pathMetadata = path.resolve(dir || ".", ".state/hofii-lock.json");
+export async function setDefaultMetadata() {
+  const cachedir = path.resolve(getHomedir(), ".cache/hofii");
+  const pathMetadata = path.resolve(cachedir, "hofii-lock.json");
 
   if (await fs.exists(pathMetadata)) {
     const state = await Bun.file(pathMetadata).json();
@@ -51,19 +51,20 @@ export async function setDefaultMetadata(configDir?: string) {
 
 /**
  * Write Metadata file
+ * File location: ~/.cache/hofii/hofii-lock.json
  */
 export async function writeMetadata() {
-  const metadataDir = path.resolve(getHofiEnv("configDir") || ".", ".state");
+  const metadatadir = path.resolve(getHomedir(), ".cache/hofii");
 
-  if (!(await fs.exists(metadataDir))) {
-    await fs.mkdir(metadataDir, { recursive: true });
+  if (!(await fs.exists(metadatadir))) {
+    await fs.mkdir(metadatadir, { recursive: true });
   }
   const metadata: Metadata = {
     config: CONFIG,
   };
 
   await Bun.write(
-    path.resolve(metadataDir, "hofii-lock.json"),
+    path.resolve(metadatadir, "hofii-lock.json"),
     JSON.stringify(metadata, null, 2),
   );
 }
