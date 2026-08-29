@@ -55,3 +55,4 @@ export const ConfigSchema = v.partial(
 export type TypeConfigSchema = v.InferOutput<typeof ConfigSchema>;
 export type ConfigSymlinks = TypeConfigSchema["symlinks"];
 export type ConfigSettings = TypeConfigSchema["settings"];
+export type SymlinkObject = v.InferOutput<typeof SymlinkObject>;
