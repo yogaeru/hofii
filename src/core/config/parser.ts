@@ -1,5 +1,6 @@
-import * as v from "valibot";
 import path from "node:path";
+import * as v from "valibot";
+import * as clack from "@clack/prompts";
 import { deepmerge } from "deepmerge-ts";
 import { ConfigSchema } from "./schema";
 import { expandPath } from "#/utils/path";
@@ -26,7 +27,16 @@ export async function parseConfigTOML(
   visitedPaths.add(absoluteFilePath);
   const content = await Bun.file(absoluteFilePath).text();
   const toml = Bun.TOML.parse(content) as TypeConfigSchema;
-  const parsedConfig = v.parse(ConfigSchema, toml);
+  let parsedConfig;
+
+  try {
+    parsedConfig = v.parse(ConfigSchema, toml);
+  } catch (error) {
+    if (error instanceof v.ValiError) {
+      clack.log.error(error.issues[0].message);
+    }
+    process.exit(1);
+  }
 
   const { imports: importedSources = [], symlinks: symlinkConfig = [] } =
     parsedConfig;

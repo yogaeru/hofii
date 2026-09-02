@@ -44,7 +44,7 @@ const FlatpakPackage = v.object({
 
 // Merged schema for the configuration file.
 export const ConfigSchema = v.partial(
-  v.object({
+  v.strictObject({
     imports: v.array(v.string()),
     settings: Settings,
     packages: v.array(v.union([FlatpakPackage, PackageObject])),
