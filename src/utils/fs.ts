@@ -75,6 +75,8 @@ async function renameFile({
   newPath: string;
   sudo?: boolean;
 }) {
+  if (!(await getFileInfo(newPath))) return;
+
   if (sudo) {
     if (getHofiEnv("platform") !== "linux") {
       clack.log.warn("Sudo only support in Linux");
