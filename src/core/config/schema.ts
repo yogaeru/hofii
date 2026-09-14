@@ -19,16 +19,19 @@ const SymlinkObject = v.object({
 // Packages related schema for the configuration file.
 const PackageManager = v.picklist(["aur", "pacman"]);
 const PostHooks = v.union([
-  v.string(),
+  // v.string(),
   v.array(v.string()),
-  v.array(v.array(v.string())),
+  // v.array(v.array(v.string())),
 ]);
 
 const PackageWithHooks = v.object({
   name: v.string(),
   post_hooks: v.optional(PostHooks),
 });
-const PackageItems = v.array(v.union([v.string(), PackageWithHooks]));
+const PackageItems = v.array(v.union([
+  v.string(),
+  PackageWithHooks,
+]));
 
 // Package object schema for the configuration file.
 const PackageObject = v.object({
@@ -52,7 +55,12 @@ export const ConfigSchema = v.partial(
   }),
 );
 
-export type TypeConfigSchema = v.InferOutput<typeof ConfigSchema>;
-export type ConfigSymlinks = TypeConfigSchema["symlinks"];
-export type ConfigSettings = TypeConfigSchema["settings"];
+export type ConfigSchema = v.InferOutput<typeof ConfigSchema>;
+export type ConfigSettings = ConfigSchema["settings"];
+
+export type ConfigSymlinks = ConfigSchema["symlinks"];
 export type SymlinkObject = v.InferOutput<typeof SymlinkObject>;
+
+export type ConfigPackages = ConfigSchema["packages"];
+export type PackageItems = v.InferOutput<typeof PackageItems>;
+export type PostHooks = v.InferOutput<typeof PostHooks>;

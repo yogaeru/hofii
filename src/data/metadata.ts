@@ -1,12 +1,16 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { getHomedir } from "#/utils/path";
-import { type TypeConfigSchema } from "#/core/config/schema";
+import { type ConfigSchema } from "#/core/config/schema";
+import type { MetadataPackages } from "#/core/package";
 
-type Config = Omit<TypeConfigSchema, "imports">;
+type ConfigBase = Omit<ConfigSchema, "imports" | "packages">
+type Config = ConfigBase & {
+  packages?: Partial<MetadataPackages>;
+};
 
 interface Metadata {
-  config?: Omit<TypeConfigSchema, "imports">;
+  config?: Config;
 }
 
 /**

@@ -2,14 +2,14 @@ import { deepEquals } from "bun";
 import fs from "node:fs/promises";
 import * as clack from "@clack/prompts";
 
-import { getHofiEnv } from "#/data/env";
-import { getMetadata, setMetadata } from "#/data/metadata";
 import {
   createSymlink,
   removeSymlink,
   getFileInfo,
   renameFile,
 } from "#/utils/fs";
+import { getHofiEnv } from "#/data/env";
+import { getMetadata, setMetadata } from "#/data/metadata";
 
 import type { ConfigSymlinks } from "./config/schema";
 
@@ -22,7 +22,7 @@ interface SymlinksArgument {
  * Apply symlinks based on the provided symlinks argument
  * @param symlinks - The symlinks to apply, including added and removed links
  */
-export async function applySymlinks(symlinks: SymlinksArgument | undefined) {
+export async function applySymlinks(symlinks: SymlinksArgument) {
   if (!symlinks) return;
   const isBackup = getHofiEnv("settings")?.backup ?? true;
   const { added = [], removed = [] } = symlinks;

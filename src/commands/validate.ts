@@ -5,15 +5,23 @@ import { ConfigSchema } from "#/core/config/schema";
 import { parseConfigTOML } from "#/core/config/parser";
 
 export async function validateCommand(path: string) {
+  let validatedConfig: ConfigSchema;
   const absPath = expandPath(path);
 
   clack.log.step("Validating Configuration");
   const spinner = clack.spinner();
   spinner.start("Validating...");
 
-  const config = await parseConfigTOML(absPath);
-  const validatedConfig = v.parse(ConfigSchema, config);
-  spinner.stop("Successfully validated with no errors!");
+  try {
+    const config = await parseConfigTOML(absPath);
+    validatedConfig = v.parse(ConfigSchema, config);
+    // clack.note(JSON.stringify(validatedConfig, null, 2));
+  } catch (e) {
+    clack.log.error(e instanceof Error ? e.message : String(e));
+    spinner.stop("Validation failed");
+    return;
+  }
 
+  spinner.stop("Successfully validated with no errors!");
   return validatedConfig;
 }

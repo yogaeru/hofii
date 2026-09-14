@@ -8,9 +8,11 @@ import { validateCommand } from "./validate";
 import { applySymlinks } from "#/core/symlink";
 import { setDefaultMetadata } from "#/data/metadata";
 import { diffConfig, buildDiffString } from "#/core/diff";
+import { installPackages } from "#/core/package";
+
 
 /**
- * Command to switch config into a new config 
+ * Command to switch config into a new config
  */
 export async function switchCommand(configDir: string) {
   const configPath = path.join(configDir, "config.toml");
@@ -25,20 +27,27 @@ export async function switchCommand(configDir: string) {
 
   // parse and validate config
   const parsedConfig = await validateCommand(configPath);
+  if (!parsedConfig) {
+    process.exit(1);
+  }
+
   setHofiEnv("settings", deepmerge(parsedConfig.settings, { backup: true }));
 
   // diff config and apply config changes
   const diffConfigRes = diffConfig(parsedConfig);
   const diffString = buildDiffString(diffConfigRes);
+  // clack.note(JSON.stringify(diffConfigRes, null, 2));
   clack.note(diffString, "Config To Apply");
 
   const isApplyConfig = await clack.confirm({
     message: "Apply config changes? (Please review the changes first!!)",
   });
+
   if (!isApplyConfig || clack.isCancel(isApplyConfig)) {
     clack.log.warn("Config changes not applied.");
     process.exit(0);
   }
 
   await applySymlinks(diffConfigRes.symlinks);
+  await installPackages(diffConfigRes.packages)
 }

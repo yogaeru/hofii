@@ -53,8 +53,11 @@ try {
       })
       .join("\n\n");
     console.error(erroMsg);
+  } else if (error instanceof Error) {
+    console.log(error.message);
+  } else {
+    console.error(error);
   }
-  console.error(error)
 } finally {
   await writeMetadata();
 }
