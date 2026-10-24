@@ -17,7 +17,7 @@ const SymlinkObject = v.object({
 });
 
 // Packages related schema for the configuration file.
-const PackageManager = v.picklist(["aur", "pacman"]);
+const PackageManager = v.picklist(["aur", "pacman", "dnf"]);
 const PostHooks = v.union([
   // v.string(),
   v.array(v.string()),
