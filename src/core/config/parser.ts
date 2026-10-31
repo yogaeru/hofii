@@ -1,10 +1,11 @@
 import path from "node:path";
+import fs from "node:fs/promises";
 import * as v from "valibot";
-import * as clack from "@clack/prompts";
 import { deepmerge } from "deepmerge-ts";
+import { parse as parseToml } from "smol-toml";
 import { ConfigSchema } from "./schema";
 import { expandPath } from "#/utils/path";
-import type { TypeConfigSchema, ConfigSymlinks } from "./schema";
+import type { ConfigSymlinks } from "./schema";
 
 /**
  * Parses a TOML configuration file and recursively merges included configs.
@@ -17,7 +18,7 @@ import type { TypeConfigSchema, ConfigSymlinks } from "./schema";
 export async function parseConfigTOML(
   filePath: string,
   visitedPaths = new Set<string>(),
-): Promise<any> {
+): Promise<ConfigSchema> {
   const absoluteFilePath = path.resolve(filePath);
   // console.log("Absolute Path: ", absoluteFilePath);
   if (visitedPaths.has(absoluteFilePath)) {
@@ -25,27 +26,18 @@ export async function parseConfigTOML(
   }
 
   visitedPaths.add(absoluteFilePath);
-  const content = await Bun.file(absoluteFilePath).text();
-  const toml = Bun.TOML.parse(content) as TypeConfigSchema;
-  let parsedConfig;
+  const content = await fs.readFile(absoluteFilePath, "utf8");
+  const toml = parseToml(content);
+  const parsedConfig = v.parse(ConfigSchema, toml);
 
-  try {
-    parsedConfig = v.parse(ConfigSchema, toml);
-  } catch (error) {
-    if (error instanceof v.ValiError) {
-      clack.log.error(error.issues[0].message);
-    }
-    process.exit(1);
-  }
-
-  const { imports: importedSources = [], symlinks: symlinkConfig = [] } =
-    parsedConfig;
-  delete parsedConfig.imports;
+  const { general = {}, symlinks: symlinkConfig = [] } = parsedConfig;
+  const importedSources = general.imports ?? [];
+  if (general.imports) delete general.imports;
 
   const parentAbsouleDir = path.dirname(absoluteFilePath);
   parsedConfig.symlinks = expandSymlinkPath(parentAbsouleDir, symlinkConfig);
 
-  let mergedParentConfigs = {};
+  let mergedParentConfigs: ConfigSchema = {};
 
   for (const source of importedSources) {
     const absoluteChildPath = path.resolve(parentAbsouleDir, source);
