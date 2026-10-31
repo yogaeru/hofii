@@ -4,7 +4,7 @@
 
 ![Hofii](https://img.shields.io/badge/hofii-dotfiles-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Bun](https://img.shields.io/badge/runtime-bun-orange)
+![Node.js](https://img.shields.io/badge/runtime-Node.js-green)
 
 ---
 
@@ -25,18 +25,18 @@ Hofii is a declarative dotfile manager for Linux that helps you:
 | 🔍 **Environment Detection** | Auto-detects OS, package manager, AUR helper, Flatpak |
 | 📋 **Declarative Config** | TOML-based configuration with import support |
 | 🔄 **Diff & Apply** | See changes before applying with interactive confirmation |
-| 💾 **State Tracking** | Lock file (`~/.cache/hofii/hofii-lock.json`) tracks applied config |-->
+| 💾 **State Tracking** | Lock file (`~/.config/hofii/hofii-lock.json`) tracks applied config |-->
 
 ## Installation
 
 ### Prerequisites
-- [Bun](https://bun.sh/) (v1.0+)
+- [Node.js](https://nodejs.org/) (v20+)
 - Linux (Arch-based distributions fully supported)
 
 ```bash
-bun add -g hofii
+npm install -g hofii
 ```
-Only support with bun 
+Hofii uses Node.js subprocesses and does not require Bun.
 
 <!--## Quick Start
 
@@ -51,8 +51,7 @@ cd ~/.config/hofii
 
 ```toml
 # ~/.config/hofii/config.toml
-[settings]
-aur_helper = "yay"    # or "paru"
+[general]
 backup = true         # backup existing files before symlinking
 
 # Symlinks: source (relative to config.toml) -> target (absolute path with ~ expansion)
@@ -68,19 +67,14 @@ target = "~/.config/nvim"
 source = "./config/zed"
 target = "~/.config/zed"
 
-# Packages to install
-[[packages]]
-manager = "pacman"
-items = ["git", "neovim", "zsh", "btop"]
+# Package-manager settings and packages
+[pacman]
+aur_helper = "yay"    # or "paru"
+packages = ["git", "neovim", "zsh", "btop", "visual-studio-code-bin"]
 
-[[packages]]
-manager = "aur"
-items = ["visual-studio-code-bin", "google-chrome"]
-
-[[packages]]
-manager = "flatpak"
+[flatpak]
 scope = "user"
-items = ["com.spotify.Client", "org.telegram.desktop"]
+packages = ["com.spotify.Client", "org.telegram.desktop"]
 ```
 
 ### 3. Add Your Dotfiles
@@ -132,13 +126,46 @@ Shows a diff of what will change, asks for confirmation, then applies symlinks.-
 
 ## Configuration Reference
 
-### Settings
+### General settings
 
 ```toml
-[settings]
-aur_helper = "yay"    # AUR helper: "yay" or "paru"
+[general]
 backup = true         # Backup existing files before creating symlinks
-flatpak = true        # Enable Flatpak support (auto-detected)
+imports = ["home.toml"]
+```
+
+### Flatpak settings
+
+Flatpak configuration is opt-in and is applied only when Flatpak is detected.
+When enabled without explicit remotes, Hofii ensures Flathub is configured on
+the first setup. Remote configuration is stored in metadata after successful
+application.
+
+```toml
+[flatpak]
+enabled = true
+scope = "user"        # or "system"
+remotes = [
+  { name = "flathub", url = "https://flathub.org/repo/flathub.flatpakrepo" },
+]
+packages = ["com.spotify.Client", "org.telegram.desktop"]
+```
+
+### DNF settings
+
+DNF repository settings are applied only on hosts where DNF is detected.
+RPM Fusion and Terra are built-in boolean options. COPR entries use the
+separate `owner/project` list, while custom repositories use named URL objects.
+
+```toml
+[dnf]
+packages = ["git", "neovim"]
+rpmfusion = true
+terra = true
+copr = ["owner/project"]
+remotes = [
+  { name = "custom", url = "https://example.com/custom.repo" },
+]
 ```
 
 ### Symlinks
@@ -150,32 +177,38 @@ target = "~/.config/nvim"   # Target path (~ expands to $HOME)
 sudo = false                # Use sudo for creation (default: false)
 ```
 
-<!--### Packages
+### Packages
 
-#### Pacman (Official Repositories)
+#### Pacman and AUR
 ```toml
-[[packages]]
-manager = "pacman"
-items = ["git", "neovim", "base-devel"]
+[pacman]
+aur_helper = "paru"  # or "yay"
+packages = ["git", "neovim", "base-devel", "google-chrome"]
 ```
 
-#### AUR (Arch User Repository)
+#### DNF
 ```toml
-[[packages]]
-manager = "aur"
-items = [
-  "visual-studio-code-bin",
-  { name = "google-chrome", post_hooks = ["sudo systemctl enable --now chrome-remote-desktop"] }
+[dnf]
+packages = ["git", "neovim"]
+rpmfusion = true
+terra = false
+copr = ["owner/project"]
+remotes = [
+  { name = "custom", url = "https://example.com/custom.repo" },
 ]
 ```
 
 #### Flatpak
 ```toml
-[[packages]]
-manager = "flatpak"
+[flatpak]
 scope = "user"      # or "system"
-items = ["com.spotify.Client", "org.telegram.desktop"]
-```-->
+packages = ["com.spotify.Client", "org.telegram.desktop"]
+```
+
+Package entries are declarative, but `switch` only applies packages for the
+package manager detected on the current host. All Flatpak packages inherit the
+`user` or `system` scope from `[flatpak]`. Arbitrary post-install hooks are
+intentionally not supported.
 
 ### Imports (Modular Config)
 
@@ -183,6 +216,7 @@ Split your config across multiple files:
 
 ```toml
 # config.toml
+[general]
 imports = ["home.toml", "work.toml"]
 
 [[symlinks]]
@@ -210,7 +244,7 @@ hofii/
 │   │   └── symlink.ts # Symlink operations
 │   ├── data/
 │   │   ├── env.ts     # Environment variables
-│   │   ├── metadata.ts # Lock file management (~/.cache/hofii/)
+│   │   ├── metadata.ts # Lock file management (~/.config/hofii/)
 │   │   └── os.ts      # OS/Package manager detection
 │   ├── pm/
 │   │   └── pacman.ts  # Pacman package operations
@@ -223,9 +257,15 @@ hofii/
 
 ## Lock File
 
-Hofii maintains a lock file at `~/.cache/hofii/hofii-lock.json` that tracks:
+Hofii maintains a lock file at `~/.config/hofii/hofii-lock.json` that tracks:
 - Applied symlinks (source, target, sudo)
+- Successfully applied package and repository state
 - Configuration state
+
+An existing lock file from the legacy `~/.cache/hofii/hofii-lock.json`
+location is migrated automatically. Metadata is updated per section: successful
+symlink and package operations are recorded independently, so a failed section
+does not claim that its requested changes were applied.
 
 This enables:
 - Diffing between current and desired state
@@ -256,8 +296,8 @@ example/
 | Manjaro | pacman | ✅ Full support |
 | Garuda | pacman | ✅ Full support |
 | CachyOS | pacman | ✅ Full support |
-| Fedora | dnf | 🔄 Planned |
-| Nobara | dnf | 🔄 Planned |
+| Fedora | dnf | ✅ Supported |
+| Nobara | dnf | ✅ Supported |
 
 ## License
 
