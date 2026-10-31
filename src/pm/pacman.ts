@@ -1,8 +1,6 @@
 import { spawn } from "#/utils/spawn";
 import { getHofiEnv } from "#/data/env";
 
-const AUR_HELPER = getHofiEnv("helperAur") as string;
-
 export abstract class Pacman {
   static async syncDatabase() {
     await spawn({
@@ -19,22 +17,24 @@ export abstract class Pacman {
     return stdout;
   }
 
-  static async install(packages: string[]) {
-    if (!AUR_HELPER) return;
+  static async install(packages: string[], _scope?: "user" | "system") {
+    const aurHelper = getHofiEnv("helperAur");
+    if (!aurHelper) return;
 
     const packagesSet = new Set(packages);
     await spawn({
-      cmd: [AUR_HELPER, "-S", "--needed", "--noconfirm", ...packagesSet],
+      cmd: [aurHelper, "-S", "--needed", "--noconfirm", ...packagesSet],
       errMsg: "Failed to install packages pacman",
     });
   }
 
-  static async remove(packages: string[]) {
-    if (!AUR_HELPER) return;
+  static async remove(packages: string[], _scope?: "user" | "system") {
+    const aurHelper = getHofiEnv("helperAur");
+    if (!aurHelper) return;
 
     const packagesSet = new Set(packages);
     await spawn({
-      cmd: [AUR_HELPER, "-R", ...packagesSet],
+      cmd: [aurHelper, "-R", ...packagesSet],
       errMsg: "Failed to uninstall packages pacman",
     });
   }
