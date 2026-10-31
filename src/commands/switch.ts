@@ -6,10 +6,10 @@ import { runScan } from "#/core/detect";
 import { setHofiEnv } from "#/data/env";
 import { validateCommand } from "./validate";
 import { applySymlinks } from "#/core/symlink";
-import { setDefaultMetadata } from "#/data/metadata";
+import { setMetadata } from "#/data/metadata";
 import { diffConfig, buildDiffString } from "#/core/diff";
 import { installPackages } from "#/core/package";
-
+import { applyRepositories } from "#/core/repository";
 
 /**
  * Command to switch config into a new config
@@ -17,9 +17,7 @@ import { installPackages } from "#/core/package";
 export async function switchCommand(configDir: string) {
   const configPath = path.join(configDir, "config.toml");
 
-  // load metadata from existing lock file
   setHofiEnv("configDir", configDir);
-  await setDefaultMetadata();
 
   clack.intro("Switching configuration");
   clack.log.info("Scanning system environment...");
@@ -28,15 +26,23 @@ export async function switchCommand(configDir: string) {
   // parse and validate config
   const parsedConfig = await validateCommand(configPath);
   if (!parsedConfig) {
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
-  setHofiEnv("settings", deepmerge(parsedConfig.settings, { backup: true }));
+  setHofiEnv("general", deepmerge(parsedConfig.general, { backup: true }));
+  if (parsedConfig.pacman?.aur_helper) {
+    setHofiEnv("helperAur", parsedConfig.pacman.aur_helper);
+  }
 
   // diff config and apply config changes
   const diffConfigRes = diffConfig(parsedConfig);
   const diffString = buildDiffString(diffConfigRes);
+
+  // Print the diff string to the console for review
+  // clack.note(JSON.stringify(parsedConfig, null, 2), "Parsed Config Response");
   // clack.note(JSON.stringify(diffConfigRes, null, 2));
+
   clack.note(diffString, "Config To Apply");
 
   const isApplyConfig = await clack.confirm({
@@ -45,9 +51,11 @@ export async function switchCommand(configDir: string) {
 
   if (!isApplyConfig || clack.isCancel(isApplyConfig)) {
     clack.log.warn("Config changes not applied.");
-    process.exit(0);
+    return;
   }
 
   await applySymlinks(diffConfigRes.symlinks);
-  await installPackages(diffConfigRes.packages)
+  await applyRepositories(diffConfigRes.repositories, parsedConfig);
+  await installPackages(diffConfigRes.packages);
+  setMetadata("general", parsedConfig.general);
 }
