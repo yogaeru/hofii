@@ -1,4 +1,4 @@
-import { deepEquals } from "bun";
+import { isDeepStrictEqual } from "node:util";
 import fs from "node:fs/promises";
 import * as clack from "@clack/prompts";
 
@@ -24,7 +24,7 @@ interface SymlinksArgument {
  */
 export async function applySymlinks(symlinks: SymlinksArgument) {
   if (!symlinks) return;
-  const isBackup = getHofiEnv("settings")?.backup ?? true;
+  const isBackup = getHofiEnv("general")?.backup ?? true;
   const { added = [], removed = [] } = symlinks;
 
   // Track successfully applied and removed symlinks
@@ -128,7 +128,7 @@ export async function applySymlinks(symlinks: SymlinksArgument) {
     const existingSymlinks = existingConfig.symlinks ?? [];
     const updatedSymlinks = existingSymlinks
       .filter(
-        (link) => !succesfullyRemovedSymlinks.some((l) => deepEquals(l, link)),
+        (link) => !succesfullyRemovedSymlinks.some((l) => isDeepStrictEqual(l, link)),
       )
       .concat(succesfullyAppliedSymlinks);
 
