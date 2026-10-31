@@ -1,24 +1,18 @@
 import * as clack from "@clack/prompts";
 
 import type { DiffPackagesResponse, DiffPkgs } from "#/types/core";
-import type {
-  ConfigPackages,
-  ConfigSchema,
-  PackageItems,
-  PostHooks,
-} from "./config/schema";
+import type { ConfigSchema, PackageItems } from "./config/schema";
 import { spawn } from "#/utils/spawn";
 import { getMetadata, setMetadata } from "#/data/metadata";
 import { getHofiEnv } from "#/data/env";
 import { PackageManagers, type PackageManager } from "#/pm";
-import { deepmerge } from "deepmerge-ts";
 
 // Read only list of supported packages managers
-export const PACKAGES_MANAGER = ["pacman", "dnf"] as const;
+export const PACKAGES_MANAGER = ["pacman", "dnf", "flatpak"] as const;
 
 export interface FilteredPackagesItems {
   items: string[];
-  hooks: PostHooks[];
+  scope?: "user" | "system";
 }
 
 type MetadataPackageItems = FilteredPackagesItems | undefined;
@@ -28,55 +22,79 @@ export type MetadataPackages = {
 };
 
 /**
- * Execute given post hooks commnad after install packages
+ * Separates packages by their manager.
+ * The return should be an object with keys as package managers and values as arrays of package items.
+ * @param packages The packages to separate.
+ * @returns An object with packages separated by their manager.
  */
-async function execPackageHooks(command: PostHooks) {
-  await spawn({
-    cmd: command,
-    errMsg: `Failed to execute post hooks: ${command.join(" ")}`,
-  });
-}
-
-export function separatePackages(packages: ConfigSchema["packages"]): DiffPkgs {
+export function separatePackages(config: ConfigSchema): DiffPkgs {
   const packagesPerManager: DiffPkgs = {
     pacman: [],
+    flatpak: [],
     dnf: [],
   };
 
-  for (const pkg of packages ?? []) {
-    if (pkg.manager === "pacman" || pkg.manager === "aur") {
-      packagesPerManager.pacman.push(...pkg.items);
-      continue;
-    }
-    if (pkg.manager === "dnf") {
-      packagesPerManager.dnf.push(...pkg.items);
-      continue;
-    }
-  }
+  packagesPerManager.pacman.push(...(config.pacman?.packages ?? []));
+  packagesPerManager.dnf.push(...(config.dnf?.packages ?? []));
+  packagesPerManager.flatpak.push(...(config.flatpak?.packages ?? []));
   return packagesPerManager;
 }
 
+/**
+ * Filter package items from the given packages.
+ * Returns normalized package items.
+ * @param packages The package names to filter.
+ * @returns An object containing normalized package items.
+ */
 export function filterPackagesItems(
   packages: PackageItems,
+  scope?: "user" | "system",
 ): FilteredPackagesItems {
-  // Stored filtered packages and hooks
   const items = [];
-  const hooks = [];
-
   for (const pkg of packages) {
-    if (typeof pkg === "object") {
-      const { name, post_hooks } = pkg;
-      if (name.trim()) items.push(name.trim());
-      if (post_hooks) hooks.push(post_hooks);
-      continue;
-    }
-    items.push(pkg);
+    if (pkg.trim()) items.push(pkg.trim());
   }
 
-  return {
-    items,
-    hooks,
+  return { items, ...(scope ? { scope } : {}) };
+}
+
+function packageItemsEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function updatePackageMetadata(
+  manager: keyof MetadataPackages,
+  added: MetadataPackageItems,
+  removed: MetadataPackageItems,
+) {
+  const existing = getMetadata().packages ?? {};
+  const previous = existing[manager];
+  const removedItems = new Set(removed?.items ?? []);
+  const nextItems = [
+    ...(previous?.items ?? []).filter((item) => !removedItems.has(item)),
+    ...(added?.items ?? []),
+  ];
+  const nextManager: FilteredPackagesItems = {
+    items: [...new Set(nextItems)],
+    ...(added?.scope
+      ? { scope: added.scope }
+      : previous?.scope
+        ? { scope: previous.scope }
+        : {}),
   };
+  const next = {
+    ...existing,
+    [manager]: nextManager,
+  };
+
+  if (
+    previous &&
+    packageItemsEqual(previous.items, nextManager.items) &&
+    previous.scope === nextManager.scope
+  ) {
+    return;
+  }
+  setMetadata("packages", next);
 }
 
 /**
@@ -88,22 +106,14 @@ async function installPackageByManagers(
   manager: PackageManager,
   packages: MetadataPackageItems,
 ) {
-  if (!packages || (packages.items.length <= 0 && packages.hooks.length <= 0))
+  if (!packages || packages.items.length <= 0)
     return;
 
   try {
-    const succesfullyHooks: PostHooks[] = [];
-
     if (packages.items.length > 0) {
       await manager.syncDatabase();
-      await manager.install(packages.items);
+      await manager.install(packages.items, packages.scope);
       clack.log.success(`Successfully Installing ${manager.name} Packages`);
-    }
-
-    // exec hooks commands
-    for (const hook of packages.hooks) {
-      await execPackageHooks(hook);
-      succesfullyHooks.push(hook);
     }
 
     return packages;
@@ -123,11 +133,11 @@ async function removePackageByManagers(
   manager: PackageManager,
   packages: MetadataPackageItems,
 ) {
-  if (!packages || (packages.items.length <= 0 && packages.hooks.length <= 0))
+  if (!packages || packages.items.length <= 0)
     return;
 
   try {
-    await manager.remove(packages.items);
+    await manager.remove(packages.items, packages.scope);
     return packages;
   } catch (error) {
     if (error instanceof Error) clack.log.error(error.message);
@@ -141,58 +151,56 @@ async function removePackageByManagers(
  */
 export async function installPackages(config: DiffPackagesResponse) {
   const { added, removed } = config;
+  const detectedManager = getHofiEnv("packageManager");
+  const activeManagers = new Set<keyof typeof PackageManagers>();
+  if (
+    detectedManager &&
+    Object.prototype.hasOwnProperty.call(PackageManagers, detectedManager)
+  ) {
+    activeManagers.add(detectedManager as keyof typeof PackageManagers);
+  }
+  if (getHofiEnv("flatpak")) activeManagers.add("flatpak");
 
-  const packageManager = getHofiEnv("packageManager");
-  const PackageManagerClass =
-    PackageManagers[packageManager as keyof typeof PackageManagers];
+  let hasChanges = false;
+  let hasAppliedChanges = false;
 
-  const addedPackages = added[packageManager as keyof typeof added];
-  const removedPackages = removed[packageManager as keyof typeof removed];
+  for (const packageManager of PACKAGES_MANAGER) {
+    const addedPackages = added[packageManager];
+    const removedPackages = removed[packageManager];
+    const hasManagerChanges =
+      (addedPackages?.items.length ?? 0) > 0 ||
+      (removedPackages?.items.length ?? 0) > 0;
 
-  if (!packageManager || packageManager! in PACKAGES_MANAGER) {
-    clack.log.error(
-      "Package Manager Not Suppported or Package Manager not detected",
+    if (!hasManagerChanges) continue;
+    hasChanges = true;
+
+    if (!activeManagers.has(packageManager)) {
+      clack.log.warn(
+        `Skipping ${packageManager} packages: manager is not available on this host`,
+      );
+      continue;
+    }
+
+    const PackageManagerClass = PackageManagers[packageManager];
+    const installedPackagesResult = await installPackageByManagers(
+      PackageManagerClass,
+      addedPackages,
     );
-    return;
-  }
-
-  // Install and remove packages by the specified package manager
-  const installedPackagesResult = await installPackageByManagers(
-    PackageManagerClass,
-    addedPackages,
-  );
-  const removedPackagesResult = await removePackageByManagers(
-    PackageManagerClass,
-    removedPackages,
-  );
-
-  // If no packages were installed or removed, log a message and return
-  // This in make sure nothing to do with metadata
-  if (!installedPackagesResult && !removedPackagesResult) {
-    clack.log.info("Nothing to do !!");
-    return;
-  }
-
-  // store metadata
-  const metadataPackage: Partial<MetadataPackages> = {};
-  const existingMetadata = getMetadata() ?? {};
-
-  if (existingMetadata.packages) {
-    metadataPackage[packageManager as keyof typeof metadataPackage] = deepmerge(
-      existingMetadata.packages[
-        packageManager as keyof typeof existingMetadata.packages
-      ] ?? {},
-      installedPackagesResult ?? {},
+    const removedPackagesResult = await removePackageByManagers(
+      PackageManagerClass,
+      removedPackages,
     );
-  } else {
-    metadataPackage[packageManager as keyof typeof metadataPackage] =
-      installedPackagesResult;
-    clack.log.info(`Metadata ${packageManager} Saved`);
+
+    if (!installedPackagesResult && !removedPackagesResult) continue;
+    hasAppliedChanges = true;
+    updatePackageMetadata(
+      packageManager,
+      installedPackagesResult,
+      removedPackagesResult,
+    );
+    clack.log.info(`Metadata ${packageManager} saved`);
   }
 
-  // save metadata
-  setMetadata("packages", metadataPackage);
-
-  clack.note(JSON.stringify(metadataPackage, null, 2), "Metadata Info");
-  // clack.note(JSON.stringify(config, null, 2), "Metadata Info");
+  if (!hasChanges) clack.log.info("No package changes to apply.");
+  else if (!hasAppliedChanges) clack.log.warn("No package changes were applied.");
 }
