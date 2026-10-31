@@ -1,4 +1,4 @@
-import type { ConfigSettings } from "#/core/config/schema";
+import type { ConfigGeneral } from "#/core/config/schema";
 
 interface HofiEnv {
   osId?: string;
@@ -10,7 +10,7 @@ interface HofiEnv {
   isFlatpak: boolean;
   helperAur: "paru" | "yay" | null;
 
-  settings?: ConfigSettings;
+  general?: ConfigGeneral;
   configDir?: string;
 }
 

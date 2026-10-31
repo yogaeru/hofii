@@ -1,18 +1,25 @@
-import { $ } from "bun";
+import fs from "node:fs/promises";
+import { execa } from "execa";
 import { getPackageManager } from "../data/os";
 import { setHofiEnv, getHofiEnvObject } from "#/data/env";
 
 type AurHelper = "yay" | "paru" | null;
 
+/**
+ * Check is command exist
+ */
 async function commandExist(command: string): Promise<boolean> {
   try {
-    await $`which ${command}`.quiet();
+    await execa("which", [command]);
     return true;
   } catch {
     return false;
   }
 }
 
+/**
+ * Getting information for installed AUR helper
+ */
 async function getAurHelper(): Promise<AurHelper[]> {
   const helpers: AurHelper[] = [];
   if (await commandExist("yay")) {
@@ -24,18 +31,23 @@ async function getAurHelper(): Promise<AurHelper[]> {
   return helpers;
 }
 
-export async function getOSName(): Promise<{ id?: string; name?: string }> {
+/**
+ * Get OS Name information
+ */
+async function getOSName(): Promise<{ id?: string; name?: string }> {
   if (process.platform === "linux") {
-    const distroName =
-      (await $`cat /etc/os-release | grep ^NAME`.quiet().text()) || "";
-    const distroId =
-      (await $`cat /etc/os-release | grep ^ID`.quiet().text()) || "";
-    const name = distroName.trim().slice(5).replace(/"/g, "");
-    const id = distroId.trim().slice(3).replace(/"/g, "");
+    const release = await fs.readFile("/etc/os-release", "utf8");
+    const values = Object.fromEntries(
+      release
+        .split("\n")
+        .map((line) => line.match(/^([A-Z_]+)=(.*)$/))
+        .filter((match): match is RegExpMatchArray => match !== null)
+        .map(([, key, value]) => [key, value!.replace(/^"|"$/g, "")]),
+    );
 
     return {
-      id,
-      name,
+      id: values.ID,
+      name: values.NAME,
     };
   }
 
@@ -45,7 +57,11 @@ export async function getOSName(): Promise<{ id?: string; name?: string }> {
   };
 }
 
-export async function runScan() {
+
+/**
+ * Enttry point to scan entire system
+ */
+async function runScan() {
   const { name = "", id = "" } = await getOSName();
   const packageManager = getPackageManager(id);
   const aurHelper = packageManager === "pacman" ? await getAurHelper() : null;
@@ -66,4 +82,9 @@ export async function runScan() {
   };
 }
 
-export { commandExist, getAurHelper };
+export {
+  commandExist,
+  getAurHelper,
+  getOSName,
+  runScan
+ };
