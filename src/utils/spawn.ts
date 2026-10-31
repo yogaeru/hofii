@@ -1,3 +1,5 @@
+import { execa } from "execa";
+
 type Options = "ignore" | "pipe" | "inherit";
 
 interface SpawnOptions {
@@ -19,29 +21,22 @@ export async function spawn({
     stderr: "inherit",
   },
 }: SpawnOptions) {
-  const proc = Bun.spawn(cmd, {
-    stdin: opt.stdin,
-    stdout: opt.stdout,
-    stderr: opt.stderr,
-  });
-
-  const stdoutPromise =
-    opt.stdout === "pipe" ? new Response(proc.stdout).text() : undefined;
-  
-  const stderrPromise =
-    opt.stderr === "pipe" ? new Response(proc.stderr).text() : undefined;
-  
- const exitCodePromise = proc.exited;
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    stdoutPromise,
-    stderrPromise,
-    exitCodePromise,
-  ]);
-
-  if (exitCode !== 0) {
-    throw new Error(errMsg ?? `Error caused with exit code ${exitCode}`);
+  try {
+    const result = await execa(cmd[0]!, cmd.slice(1), {
+      stdin: opt.stdin,
+      stdout: opt.stdout,
+      stderr: opt.stderr,
+      reject: true,
+    });
+    return {
+      stdout: opt.stdout === "pipe" ? result.stdout : undefined,
+      stderr: opt.stderr === "pipe" ? result.stderr : undefined,
+      exitCode: result.exitCode,
+    };
+  } catch (error) {
+    if (error instanceof Error && errMsg) {
+      throw new Error(`${errMsg}: ${error.message}`, { cause: error });
+    }
+    throw error;
   }
-
-  return { stdout, stderr, exitCode };
 }
