@@ -15,7 +15,7 @@ export abstract class DNF {
     return stdout;
   }
 
-  static async install(packages: string[]) {
+  static async install(packages: string[], _scope?: "user" | "system") {
     if (packages.length <= 0) return;
 
     await spawn({
@@ -24,7 +24,7 @@ export abstract class DNF {
     });
   }
 
-  static async remove(packages: string[]) {
+  static async remove(packages: string[], _scope?: "user" | "system") {
     if (packages.length <= 0) return;
 
     await spawn({
