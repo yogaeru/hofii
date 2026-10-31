@@ -1,4 +1,6 @@
 import * as v from "valibot";
+import fs from "node:fs/promises";
+import pathModule from "node:path";
 import * as clack from "@clack/prompts";
 import { expandPath } from "#/utils/path";
 import { ConfigSchema } from "#/core/config/schema";
@@ -6,7 +8,10 @@ import { parseConfigTOML } from "#/core/config/parser";
 
 export async function validateCommand(path: string) {
   let validatedConfig: ConfigSchema;
-  const absPath = expandPath(path);
+  const expandedPath = expandPath(path);
+  const absPath = (await fs.stat(expandedPath)).isDirectory()
+    ? pathModule.join(expandedPath, "config.toml")
+    : expandedPath;
 
   clack.log.step("Validating Configuration");
   const spinner = clack.spinner();
